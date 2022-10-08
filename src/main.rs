@@ -4,7 +4,10 @@ use crate::gemini::*;
 use crossbeam_channel::unbounded;
 use gmi::url::{Path, Url};
 use log::*;
-use std::sync::{mpsc, Arc, Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{mpsc, Arc, Mutex},
+};
 use threadpool::ThreadPool;
 use unqlite::{Config, Cursor, UnQLite, KV};
 
@@ -22,6 +25,15 @@ fn main() {
             println!("Hello from worker {}", id);
             loop {
                 let link = receiver.recv().unwrap();
+
+                // check if db already contains the page
+                // let db_readonly = db.lock().unwrap();
+                // if db_readonly.kv_contains(link.clone()) {
+                //     info!("{} already in db", link);
+                //     continue;
+                // }
+                // drop(db_readonly);
+
                 let url = Url::try_from(link.as_str())
                     .expect("couldn't convert link in channel to a Url");
                 let page = download(url.clone());

@@ -16,7 +16,12 @@ pub fn get_links(url: Url, page: &str) -> Vec<String> {
         match node {
             GemtextNode::Link(link, _) => {
                 // if link starts with gopher:// or http, don't include it
-                if link.starts_with("gopher://") || link.starts_with("http") {
+                if link.starts_with("gopher://")
+                    || link.starts_with("http")
+                    || link.ends_with(".xml")
+                    || link.ends_with(".jpg")
+                    || link.ends_with(".mp4")
+                {
                     continue;
                 }
 
