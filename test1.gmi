@@ -1,0 +1,18 @@
+# Solderpunk versus the windmills: a Gemlog
+
+Welcome to my Gemlog!  I write about all sorts of things, but recurring themes include: decentralism, minimalism, privacy, simplicity, and sustainability/environmentalism (most frequently in relation to technology, especially computers and the internet, but I'm interested in these things in all spheres), cycling (especially with simple and/or old bikes), photography (especially with simple and/or old cameras - are you seeing the pattern?) and outdoor recreation (especially if I got there by bike and brought a camera with me).
+
+## Administriva
+
+=> ../old-gemlogs.gmi A brief note on my early gemlogs, now merged into this one
+
+Everything posted here which is not related to Gemini or a response to something posted in Geminispace can also be read via Gopher, if you'd prefer.  Check out
+=> gopher://zaibatsu.circumlunar.space:70/1/~solderpunk/phlog My phlog at the Circumlunar Zaibatsu
+
+## Posts
+
+=> atom.xml Atom feed of 10 most recent posts
+
+=> franken-peugeot-updates.gmi			2022-09-18 - Franken-Peugeot updates
+=> gemini-mailing-list-down.gmi			2022-01-01 - Gemini mailing list down
+=> green-days-in-brunei.gmi			2021-11-10 - Green days in Brunei
