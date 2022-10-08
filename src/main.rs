@@ -26,31 +26,30 @@ fn main() {
             loop {
                 let link = receiver.recv().unwrap();
 
-                // check if db already contains the page
-                // let db_readonly = db.lock().unwrap();
-                // if db_readonly.kv_contains(link.clone()) {
-                //     info!("{} already in db", link);
-                //     continue;
-                // }
-                // drop(db_readonly);
+                // does the link look like it might be valid
+                // gemtext, or just a binary file? just a simple check to save bandwidth
+                if !check_link_could_be_gemtext(link.clone()) {
+                    continue;
+                }
 
                 let url = Url::try_from(link.as_str())
                     .expect("couldn't convert link in channel to a Url");
                 let page = download(url.clone());
                 match page {
-                    Ok(s) => {
-                        // are there any links in this page? if so add them to the channel/queue
-                        let links = std::panic::catch_unwind(|| get_links(url.clone(), s.as_str()));
-                        match links {
-                            Ok(links) => {
-                                for link in links {
-                                    sender.send(link).unwrap();
-                                }
-                                // lock the Arc and Mutex
-                                let db = db.lock().unwrap();
-                                db.kv_store(url.to_string(), s).unwrap();
+                    Ok((s, meta)) => {
+                        // if meta == text/gemini or text/plain, save to db
+                        if meta.contains("text/gemini") || meta.contains("text/plain") {
+                            // lock the Arc and Mutex
+                            let db = db.lock().unwrap();
+                            db.kv_store(url.to_string(), s.clone()).unwrap();
+                        }
+
+                        // if the page is a gemtext, parse links and add them to the channel
+                        if meta.contains("text/gemini") {
+                            let links = get_links(url.clone(), s.as_str());
+                            for link in links {
+                                sender.send(link).unwrap();
                             }
-                            Err(e) => error!("{} failed@get_links() parsing page: {:?}", url, e),
                         }
                     }
                     Err(e) => warn!("{} failed: {}", url, e),

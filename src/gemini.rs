@@ -1,4 +1,5 @@
 use gmi::gemtext::{parse_gemtext, GemtextNode};
+use gmi::protocol::Response;
 use gmi::request;
 use gmi::url::{Path, Url};
 use log::*;
@@ -15,13 +16,8 @@ pub fn get_links(url: Url, page: &str) -> Vec<String> {
         let mut url = url.clone();
         match node {
             GemtextNode::Link(link, _) => {
-                // if link starts with gopher:// or http, don't include it
-                if link.starts_with("gopher://")
-                    || link.starts_with("http")
-                    || link.ends_with(".xml")
-                    || link.ends_with(".jpg")
-                    || link.ends_with(".mp4")
-                {
+                // some links are https://, gopher:// etc. Don't process those.
+                if !check_link_is_inside_geminispace(link.clone()) {
                     continue;
                 }
 
@@ -50,22 +46,41 @@ pub fn get_links(url: Url, page: &str) -> Vec<String> {
     return links;
 }
 
-pub fn download(url: Url) -> Result<String, Box<dyn std::error::Error>> {
+pub fn download(url: Url) -> Result<(String, String), Box<dyn std::error::Error>> {
     // use gmi to get a page
     let page = request::make_request(&url);
 
     match page {
         Ok(page) => {
-            let s = String::from_utf8_lossy(&page.data);
-            // match s, if it is a String or a str
-            let s = match s {
-                std::borrow::Cow::Borrowed(s) => s.to_string(),
-                std::borrow::Cow::Owned(s) => s,
-            };
-            Ok(s)
+            if page.meta.contains("text/gemini") || page.meta.contains("text/plain") {
+                let s = String::from_utf8_lossy(&page.data);
+                // match s, if it is a String or a str
+                let s = match s {
+                    std::borrow::Cow::Borrowed(s) => s.to_string(),
+                    std::borrow::Cow::Owned(s) => s,
+                };
+                Ok((s, page.meta))
+            } else {
+                // return an error with format!("{} did not have meta=text/gemini, probably binary, not returning",url)
+                Err(format!("{} had meta='{}', not returning", url, page.meta).into())
+            }
         }
         Err(err) => Err(Box::new(err)),
     }
+}
+
+pub fn check_link_could_be_gemtext(s: String) -> bool {
+    if s.ends_with(".xml") || s.ends_with(".jpg") || s.ends_with(".mp4") {
+        return false;
+    }
+    return true;
+}
+
+pub fn check_link_is_inside_geminispace(s: String) -> bool {
+    if s.starts_with("gopher://") || s.starts_with("https://") || s.starts_with("http://") {
+        return false;
+    }
+    return true;
 }
 
 // test get_links
@@ -83,7 +98,6 @@ mod tests {
         let links = get_links(url, &page.as_str());
         let expected_links = [
             "gemini://gemini.circumlunar.space/~solderpunk/gemlog/../old-gemlogs.gmi",
-            "gemini://gemini.circumlunar.space/~solderpunk/gemlog/atom.xml",
             "gemini://gemini.circumlunar.space/~solderpunk/gemlog/franken-peugeot-updates.gmi",
             "gemini://gemini.circumlunar.space/~solderpunk/gemlog/gemini-mailing-list-down.gmi",
             "gemini://gemini.circumlunar.space/~solderpunk/gemlog/green-days-in-brunei.gmi",
