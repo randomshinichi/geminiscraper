@@ -28,20 +28,25 @@ fn main() {
                 match page {
                     Ok(s) => {
                         // are there any links in this page? if so add them to the channel/queue
-                        let links = get_links(url.clone(), s.as_str());
-                        for link in links {
-                            sender.send(link).unwrap();
+                        let links = std::panic::catch_unwind(|| get_links(url.clone(), s.as_str()));
+                        match links {
+                            Ok(links) => {
+                                for link in links {
+                                    sender.send(link).unwrap();
+                                }
+                                // lock the Arc and Mutex
+                                let db = db.lock().unwrap();
+                                db.kv_store(url.to_string(), s).unwrap();
+                            }
+                            Err(e) => error!("{} failed@get_links() parsing page: {:?}", url, e),
                         }
-                        // lock the Arc and Mutex
-                        let db = db.lock().unwrap();
-                        db.kv_store(url.to_string(), s).unwrap();
                     }
                     Err(e) => warn!("{} failed: {}", url, e),
                 }
             }
         });
     }
-    stderrlog::new().verbosity(1).quiet(false).init().unwrap();
+    stderrlog::new().verbosity(2).quiet(false).init().unwrap();
 
     // get command line arguments
     let args: Vec<String> = std::env::args().collect();
