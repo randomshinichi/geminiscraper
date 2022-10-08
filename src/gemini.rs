@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use unqlite::{Config, Cursor, UnQLite, KV};
 
-type Db = Arc<Mutex<UnQLite>>;
+pub type Db = Arc<Mutex<UnQLite>>;
 
 pub fn get_links(url: Url, page: &str) -> Vec<String> {
     let mut links = vec![];
@@ -45,35 +45,6 @@ pub fn get_links(url: Url, page: &str) -> Vec<String> {
     return links;
 }
 
-pub fn download_links(links: Vec<String>, db: Db) {
-    for link in links {
-        let db = Arc::clone(&db);
-
-        // check if db already contains the page
-        let db_readonly = db.lock().unwrap();
-        if db_readonly.kv_contains(link.clone()) {
-            warn!("db already contains {}", link);
-            continue;
-        }
-        drop(db_readonly);
-
-        thread::spawn(move || {
-            let page = download(
-                Url::try_from(link.as_str()).expect("couldn't convert a String into a URL"),
-            );
-            match page {
-                // match page
-                Ok(s) => {
-                    // lock the Arc and Mutex
-                    let db = db.lock().unwrap();
-                    db.kv_store(link, s).unwrap();
-                }
-                Err(_) => (),
-            }
-        });
-    }
-}
-
 pub fn download(url: Url) -> Result<String, Box<dyn std::error::Error>> {
     // use gmi to get a page
     let page = request::make_request(&url);
@@ -88,10 +59,7 @@ pub fn download(url: Url) -> Result<String, Box<dyn std::error::Error>> {
             };
             Ok(s)
         }
-        Err(err) => {
-            error!("couldn't download {}", url);
-            Err(Box::new(err))
-        }
+        Err(err) => Err(Box::new(err)),
     }
 }
 
