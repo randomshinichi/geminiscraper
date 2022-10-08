@@ -1,2 +1,6 @@
 /target
 *.db
+*.db_unqlite_journal
+.vscode/
+Cargo.lock
+*.log
