@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 // type Db = Arc<Mutex<UnQLite>>;
 type Db = Arc<Mutex<HashMap<String, String>>>;
+
 #[tokio::main]
 async fn main() {
     // let unqlite = Arc::new(Mutex::new(UnQLite::create("test.db")));
@@ -19,62 +20,58 @@ async fn main() {
     // get command line arguments
     let args: Vec<String> = std::env::args().collect();
     let command = args[1].clone();
-    let url = args[2].clone();
+    let u = args[2].clone();
 
     // match command
     match command.as_str() {
         "scan" => {
-            let u = Url::try_from(url.as_str()).expect("url couldn't be parsed");
-            let page = download(u.clone()).await.expect("couldn't download gemini url");
-            let gmi = parse_gemtext(&page.clone());
+            let url = Url::try_from(u.as_str()).expect("url couldn't be parsed");
+            let page = download(url.clone()).await.expect("couldn't download gemini url");
 
-            for node in gmi {
-                match node {
-                    GemtextNode::Link(link, descriptor) => parse_link_download(u.clone(), Path::from(link.as_str()), db.clone()).await,
-                    _ => (),
-                }
-            };
+            download_links_in_page(url, page.to_string(), db).await;
         },
         "read" => {
             let root = args[3].clone();
-            let u = Url::try_from(url.as_str()).expect("url couldn't be parsed");
+            let url = Url::try_from(root.as_str()).expect("url couldn't be parsed");
             // use fs::read_to_string to open gemlog.gmi
-            let contents = std::fs::read_to_string(url.clone()).expect("Something went wrong reading the file");
-            let gmi = parse_gemtext(&contents.to_string());
-            // iterate over gmi
-            for node in gmi {
-                match node {
-                    GemtextNode::Link(link, descriptor) => parse_link_download(u.clone(), Path::from(link.as_str()), db.clone()).await,
-                    _ => ()
-                }
-            };
+            let contents = std::fs::read_to_string(u.clone()).expect("Something went wrong reading the file");
 
+            download_links_in_page(url, contents.to_string(), db).await;
         },
         _ => {
             println!("Command not found");
         }
     }
-    println!("{:?}", db);
-
 }
 
-async fn parse_link_download(mut root: Url, link: Path, db: Db) {
-    info!("found path {}", link);
-    root.path = Some(link);
-    tokio::spawn(async move {
-        let page = download(root.clone()).await;
-        match page {
-            // match page
-            Ok(s) => {
-                // lock the Arc and Mutex
-                let mut db = db.lock().unwrap();
-                // db.kv_store(url, page).unwrap();
-                db.insert(root.to_string(), s);
+async fn download_links_in_page(url: Url, page: String, db: Db) {
+    let gmi = parse_gemtext(&page.to_string());
+    for node in gmi {
+        let db = db.clone();
+        let mut url = url.clone();
+        match node {
+            GemtextNode::Link(link, _) => {
+                info!("found path {}", link.clone());
+                url.path = Some(Path::from(link.as_str()));
+                tokio::spawn(async move {
+                    let page = download(url.clone()).await;
+                    match page {
+                        // match page
+                        Ok(s) => {
+                            // lock the Arc and Mutex
+                            let mut db = db.lock().unwrap();
+                            // db.kv_store(url, page).unwrap();
+                            db.insert(url.to_string(), s);
+                        },
+                        Err(_) => ()
+                    }
+                });
             },
-            Err(_) => ()
+            _ => ()
         }
-    });
+    };
 }
+
 
 async fn download(url: Url) -> Result<String, Box<dyn std::error::Error>> {
     // use gmi to get a page
@@ -91,7 +88,7 @@ async fn download(url: Url) -> Result<String, Box<dyn std::error::Error>> {
             Ok(s)
         },
         Err(err) => {
-            warn!("couldn't download {}", url);
+            error!("couldn't download {}", url);
             Err(Box::new(err))
         }
     }
