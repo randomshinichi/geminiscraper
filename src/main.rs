@@ -1,20 +1,18 @@
 extern crate unqlite;
 
-use unqlite::{UnQLite};
+use unqlite::{UnQLite,KV, Config, Cursor};
 use gmi::url::{Path, Url};
 use gmi::request;
 use gmi::gemtext::{parse_gemtext, GemtextNode};
 use log::*;
 use std::sync::{Arc,Mutex};
-use std::collections::HashMap;
 
-// type Db = Arc<Mutex<UnQLite>>;
-type Db = Arc<Mutex<HashMap<String, String>>>;
+type Db = Arc<Mutex<UnQLite>>;
 
 #[tokio::main]
 async fn main() {
-    // let unqlite = Arc::new(Mutex::new(UnQLite::create("test.db")));
-    let db = Arc::new(Mutex::new(HashMap::new()));
+    let db = Arc::new(Mutex::new(UnQLite::create("test.db")));
+    // let db = Arc::new(Mutex::new(HashMap::new()));
     stderrlog::new().verbosity(2).quiet(false).init().unwrap();
 
     // get command line arguments
@@ -51,17 +49,39 @@ async fn download_links_in_page(url: Url, page: String, db: Db) {
         let mut url = url.clone();
         match node {
             GemtextNode::Link(link, _) => {
-                info!("found path {}", link.clone());
-                url.path = Some(Path::from(link.as_str()));
+                // only download .gmi links
+                if !link.contains(".gmi") {
+                    continue;
+                }
+
+                // link is just "filename.gmi". Merge it with
+                // gemini://hostname/phlog/ to get the full path
+                match url.path {
+                    Some(path)  => {
+                        url.path = Some(path.merge_path(&Path::try_from(link.as_str()).unwrap()));
+                    },
+                    None => {
+                        url.path = Some(Path::try_from(link.as_str()).unwrap());
+                    }
+                }
+                info!("found path {}", url.clone().to_string());
+
+                // check if db already contains the page
+                let db_readonly = db.lock().unwrap();
+                if db_readonly.kv_contains(url.to_string()) {
+                    warn!("db already contains {}", url.to_string());
+                    continue
+                }
+                drop(db_readonly);
+
                 tokio::spawn(async move {
                     let page = download(url.clone()).await;
                     match page {
                         // match page
                         Ok(s) => {
                             // lock the Arc and Mutex
-                            let mut db = db.lock().unwrap();
-                            // db.kv_store(url, page).unwrap();
-                            db.insert(url.to_string(), s);
+                            let db = db.lock().unwrap();
+                            db.kv_store(url.to_string(), s).unwrap();
                         },
                         Err(_) => ()
                     }
